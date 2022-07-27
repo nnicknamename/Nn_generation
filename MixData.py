@@ -30,14 +30,13 @@ class MixableDataset(Dataset):
         self.length=length
 
     def __len__(self):
-
         return self.length
 
     def map_index(self,index):
         len=0
         for dataset in self.datasets:
             len+=dataset.__len__()
-            if len >=index:
+            if len >index:
                 return dataset, index-(len-dataset.__len__())
     
     def transform_label(self,label,dataset):
@@ -56,7 +55,7 @@ class MixableDataset(Dataset):
         dataset_idx=self.idx_table[focusClass].copy()
         
         for i in [i for i in range(len(self.classes)) if i != focusClass] :
-            s=int(len(self.idx_table[focusClass])/(len(self.classes)-1))
+            s=int(len(self.idx_table[focusClass])/(len(self.classes)))
             if s>len(self.idx_table[i]):
                 s=len(self.idx_table[i])
                 dataset_idx.extend(self.idx_table[i])
@@ -93,6 +92,7 @@ class Subdataset(Dataset):
         _,label=self.dataset[self.idx_table[index]]
         return label
     def __getitem__(self, index):
-        datapoint,label=self.dataset[self.idx_table[index]]
+        a=self.idx_table[index]
+        datapoint,label=self.dataset[a]
         return datapoint,self.transform_label(label)
         
