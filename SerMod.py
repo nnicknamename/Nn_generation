@@ -9,6 +9,9 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
+from dask import delayed
+from dask import compute
+
 class SerMod(nn.Module):
   def __init__(self,layer_spec):
     super(SerMod, self).__init__()
@@ -103,12 +106,18 @@ class Trainer:
     _,clas=data
     return DataLoader(dataset=self.dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True)
   
-  
+  def train(self,data):
+    model,subdataloader=data
+    model_trainer=pl.Trainer(weights_summary=None,enable_progress_bar=False,logger=False)
+    model_trainer.fit(model=model,train_dataloaders=subdataloader)
+    
   def train_models(self,data):
     models=[(self.create_model(m),self.create_dataLoader(m)) for m in data]
-    for model,dataLoader in models:
-      model_trainer=pl.Trainer(weights_summary=None,enable_progress_bar=False,logger=False)
-      model_trainer.fit(model=model,train_dataloaders=dataLoader)
+    list_of_delayed_functions = []
+
+    for d in models:
+      list_of_delayed_functions.append(delayed(self.train)(d))
+    compute(list_of_delayed_functions)
     return self.serialize_models(models)
 
   def serialize_models(self,models):
