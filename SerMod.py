@@ -91,24 +91,24 @@ class light_serial_model(pl.LightningModule):
 
 
 class Trainer:
-  def __init__(self,batch_size,lr_rate,nb_epoch,dataset,model_spec):
+  def __init__(self,batch_size,lr_rate,nb_epoch,dataset,model_spec,gpus=0):
     self.batch_size=batch_size
     self.lr_rate=lr_rate
     self.nb_epochs=nb_epoch
     self.dataset=dataset
     self.model_spec=model_spec
-
+    self.gpus=gpus
   def create_model(self,data):
     model_vector,_=data
     return light_serial_model(model_vector,self.model_spec,self.lr_rate)
   
   def create_dataLoader(self,data):
     _,clas=data
-    return DataLoader(dataset=self.dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True)
+    return DataLoader(dataset=self.dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=2,pin_memory=True)
   
   def train(self,data):
     model,subdataloader=data
-    model_trainer=pl.Trainer(weights_summary=None,enable_progress_bar=False,logger=False)
+    model_trainer=pl.Trainer(weights_summary=None,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.fit(model=model,train_dataloaders=subdataloader)
     
   def train_models(self,data):
