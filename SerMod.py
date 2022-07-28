@@ -115,7 +115,7 @@ class Trainer:
     list_of_delayed_functions = []
     for d in models:
       list_of_delayed_functions.append(delayed(self.train)(d))
-    compute(list_of_delayed_functions)
+    compute(list_of_delayed_functions,scheduler='processes', num_workers=5)
     return self.serialize_models(models) 
 
   def serialize_models(self,models):
