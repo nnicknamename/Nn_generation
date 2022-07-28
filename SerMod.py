@@ -121,8 +121,9 @@ class Trainer:
     return self.serialize_models(models) 
 
   def serialize_models(self,models):
+    res=None
     for model,_ in models:
-      serial_model=model.serialize_model()
+      serial_model=model.model.serialize_model()
       if res==None:
         res=serial_model.reshape(-1,len(serial_model))
       else:
