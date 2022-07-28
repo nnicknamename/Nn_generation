@@ -1,13 +1,10 @@
 import torch
 import torch.nn as nn
-import numpy as np
-import threading
-from .debug import Debug
-import math
 from torch.utils.data import DataLoader, random_split
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from IPython.utils import io
 
 from dask import delayed
 from dask import compute
@@ -108,8 +105,9 @@ class Trainer:
   
   def train(self,data):
     model,subdataloader=data
-    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,weights_summary=None,enable_progress_bar=False,logger=False,gpus=self.gpus)
-    model_trainer.fit(model=model,train_dataloaders=subdataloader)
+    with io.capture_output() as captured:
+      model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,weights_summary=None,enable_progress_bar=False,logger=False,gpus=self.gpus)
+      model_trainer.fit(model=model,train_dataloaders=subdataloader)
     
   def train_models(self,data):
     models=[(self.create_model(m),self.create_dataLoader(m)) for m in data]
