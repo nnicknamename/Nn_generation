@@ -105,15 +105,14 @@ class Trainer:
   
   def train(self,data):
     model,subdataloader=data
-    with io.capture_output() as captured:
+    #with io.capture_output() as captured:
       #logging.getLogger("lightning").setLevel(logging.ERROR)
-      model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,weights_summary=None,enable_progress_bar=True,logger=False,gpus=self.gpus)
-      model_trainer.fit(model=model,train_dataloaders=subdataloader)
+    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
+    model_trainer.fit(model=model,train_dataloaders=subdataloader)
     
   def train_models(self,data):
     models=[(self.create_model(m),self.create_dataLoader(m)) for m in data]
     list_of_delayed_functions = []
-
     for d in models:
       list_of_delayed_functions.append(delayed(self.train)(d))
     compute(list_of_delayed_functions)
