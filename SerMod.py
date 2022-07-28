@@ -106,8 +106,8 @@ class Trainer:
   def train(self,data):
     model,subdataloader=data
     with io.capture_output() as captured:
-      logging.getLogger("lightning").setLevel(logging.ERROR)
-      model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,weights_summary=None,enable_progress_bar=False,logger=False,gpus=self.gpus)
+      #logging.getLogger("lightning").setLevel(logging.ERROR)
+      model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,weights_summary=None,enable_progress_bar=True,logger=False,gpus=self.gpus)
       model_trainer.fit(model=model,train_dataloaders=subdataloader)
     
   def train_models(self,data):
