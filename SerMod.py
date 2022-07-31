@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from IPython.utils import io
 import logging
+from NnGen.debug import Debug
 from dask import delayed
 from dask import compute
 
@@ -102,13 +103,13 @@ class Trainer:
   
   def create_dataLoader(self,data):
     _,clas=data
-    return DataLoader(dataset=self.dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=2,pin_memory=True)
+    return DataLoader(dataset=self.dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=4,pin_memory=True)
   
   def train(self,data):
     model,subdataloader=data
     #with io.capture_output() as captured:
       #logging.getLogger("lightning").setLevel(logging.ERROR)
-    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
+    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=5,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.fit(model=model,train_dataloaders=subdataloader)
     
   def train_models(self,data):
@@ -131,63 +132,67 @@ class Trainer:
 
 
 
-# class Trainer :
-#     def __init__(self,batch_size,lr_rate,nb_epoch,input_size,dataset,zeroTrain=False):
-#         self.batch_size=batch_size
-#         self.lr_rate=lr_rate
-#         self.nb_epoch=nb_epoch
-#         self.input_size=input_size
-#         self.debug=Debug()
-#         self.zeroTrain=zeroTrain
-#         self.dataset=dataset
+class Trainer2 :
+    def __init__(self,batch_size,lr_rate,nb_epoch,input_size,dataset,zeroTrain=False):
+        self.batch_size=batch_size
+        self.lr_rate=lr_rate
+        self.nb_epoch=nb_epoch
+        self.input_size=input_size
+        self.debug=Debug()
+        self.zeroTrain=zeroTrain
+        self.dataset=dataset
 
-#     def train(self,data,modelSpec):
+    def train(self,data,modelSpec):
+      
+        models=[]
+        for i,d in enumerate(data):
+            vmodel,clas=d
+            model=SerMod(modelSpec)
+            if not self.zeroTrain:
+              model.unserialize_model(vmodel)
+            dataloader=DataLoader(self.dataset.get_subDatast(clas),num_workers=4,batch_size=self.batch_size,shuffle=True,pin_memory=True)
+            models.append({'model':model,'loader':dataloader,'idx':i})
+        #pool = multiprocessing.Pool()
+        #pool = multiprocessing.Pool(processes=10)
+        #threads=[]
+        #for model in models:
+        #  th=threading.Thread(target=self.train_model,args=(model,))
+        #  threads.append(th)
+        #  th.start()
+
+        #for thread in threads:
+        #  thread.join()
+          #self.train_model(model)
+
+        list_of_delayed_functions = []
+        for d in models:
+          list_of_delayed_functions.append(delayed(self.train_model)(d))
+        models_loss=compute(list_of_delayed_functions)
         
-#         models=[]
-#         for i,d in enumerate(data):
-#             model=SerMod(modelSpec)
-#             if not self.zeroTrain:
-#               model.unserialize_model(d['model'])
-#             dataloader=DataLoader(self.dataset.get_subDatast(d['class']))
-#             models.append({'model':model,'loader':dataloader,'idx':i})
-#         #pool = multiprocessing.Pool()
-#         #pool = multiprocessing.Pool(processes=10)
-#         #threads=[]
-#         #for model in models:
-#         #  th=threading.Thread(target=self.train_model,args=(model,))
-#         #  threads.append(th)
-#         #  th.start()
-
-#         #for thread in threads:
-#         #  thread.join()
-#           #self.train_model(model)
-#         models_loss=map(self.train_model,models)
-#         s=0
-#         for loss in models_loss:
-#           s+=loss
-#         #print(model.serialize_model())
-#         res=None
-#         for model in models:
-#           serial_model=model['model'].serialize_model()
-#           if res==None:
-#             res=serial_model.reshape(-1,len(serial_model))
-#           else:
-#             res=torch.cat([res,serial_model.reshape(-1,len(serial_model))])
-#         return res,s/len(models)
+        #models_loss=map(self.train_model,models)
+        #print(model.serialize_model())
+        res=None
+        for model in models:
+          serial_model=model['model'].serialize_model()
+          if res==None:
+            res=serial_model.reshape(-1,len(serial_model))
+          else:
+            res=torch.cat([res,serial_model.reshape(-1,len(serial_model))])
+        return res
 
 
-#     def train_model(self ,data):
-#       loss=nn.MSELoss()
-#       optimizer=torch.optim.Adam(data['model'].parameters(),lr=self.lr_rate)
-#       for epoch in range(self.nb_epoch):
-#         for i,(images,labels) in enumerate(data['loader']):
-#           images=images.reshape(-1,self.input_size)
-#           output=data['model'](images)  
-#           Loss=loss(output,labels)
-#           optimizer.zero_grad()
-#           Loss.backward()
-#           optimizer.step()
-#           self.debug.writeUpdate('  model:'+str(data['idx'])+'  epoch:'+str(epoch)+'  Loss:'+str(Loss.item()))
-#       self.debug.write('\n')
-#       return Loss.item()
+    def train_model(self ,data):
+      loss=nn.MSELoss()
+      optimizer=torch.optim.Adam(data['model'].parameters(),lr=self.lr_rate)
+      for epoch in range(self.nb_epoch):
+        for i,(images,labels) in enumerate(data['loader']):
+          images=images.reshape(-1,self.input_size)
+          output=data['model'](images)  
+          Loss=loss(output,labels)
+          optimizer.zero_grad()
+          Loss.backward()
+          optimizer.step()
+          self.debug.writeUpdate('  model:'+str(data['idx'])+'  epoch:'+str(epoch)+'  Loss:'+str(Loss.item()))
+      self.debug.write('\n')
+      return Loss.item()
 
