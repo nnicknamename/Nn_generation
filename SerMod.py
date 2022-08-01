@@ -63,9 +63,9 @@ class light_serial_model(pl.LightningModule):
   def __init__(self,model_vector,model_spec,learning_rate,randomInint=False):
     super().__init__()
     self.model_spec=model_spec
+    self.model= SerMod(model_spec)
     if not randomInint:
-      self.model= SerMod(model_spec)
-    self.model.unserialize_model(model_vector)
+      self.model.unserialize_model(model_vector)
     self.learning_rate=learning_rate
   def forward(self,x):
     return self.model(x)
