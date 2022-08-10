@@ -40,7 +40,6 @@ class SerMod(nn.Module):
 
   def serialize_layer(self,layer):
     l=layer.state_dict()
-    #extract Weights
     w=l['weight'].clone().detach().flatten()
     #extract Biasis
     b=l['bias'].clone().detach().flatten()
@@ -78,12 +77,12 @@ class light_serial_model(pl.LightningModule):
     self.log('train_loss',Loss)
     return Loss
 
-  def validation_step(self,batch,batch_idx):
+  def test_step(self,batch,batch_idx):
     images,labels=batch 
     images=images.reshape(-1,self.model_spec[0])
     output=self.forward(images)  
     Loss=F.mse_loss(output,labels)
-    self.log("val_loss",Loss)
+    self.log("val_loss",Loss)   
 
   def configure_optimizers(self):
     return torch.optim.Adam(self.parameters(),lr=self.learning_rate)
@@ -113,7 +112,20 @@ class Trainer:
       #logging.getLogger("lightning").setLevel(logging.ERROR)
     model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.fit(model=model,train_dataloaders=subdataloader)
-    
+
+  def test(self,data):
+    model,subdataloader=data
+    model_trainer=pl.Trainer(max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
+    model_trainer.test(model=model,dataloaders=subdataloader)
+
+  def test_models(self,data):
+    models=[(self.create_model(m),self.create_test_dataLoader(m)) for m in data]
+    list_of_delayed_functions = []
+    for d in models:
+      list_of_delayed_functions.append(delayed(self.test)(d))
+    res=compute(list_of_delayed_functions, num_workers=self.num_workers)[0]
+    return res 
+
   def train_models(self,data):
     models=[(self.create_model(m),self.create_dataLoader(m)) for m in data]
     list_of_delayed_functions = []
