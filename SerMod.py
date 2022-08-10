@@ -1,3 +1,4 @@
+import enum
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
@@ -89,28 +90,28 @@ class light_serial_model(pl.LightningModule):
 
 
 class Trainer:
-  def __init__(self,batch_size,lr_rate,nb_epoch,dataset,model_spec,random_init=False,num_workers=2,gpus=0):
+  def __init__(self,batch_size,lr_rate,nb_epoch,train_dataset,model_spec,test_dataset=None,random_init=False,num_workers=2,gpus=0):
     self.batch_size=batch_size
     self.lr_rate=lr_rate
     self.nb_epochs=nb_epoch
-    self.dataset=dataset
+    self.train_dataset=train_dataset
     self.model_spec=model_spec
     self.gpus=gpus
     self.random_init=random_init
     self.num_workers=num_workers
+    self.test_dataset=test_dataset
+
   def create_model(self,data):
     model_vector,_=data
     return light_serial_model(model_vector,self.model_spec,self.lr_rate,randomInint=self.random_init)
   
   def create_dataLoader(self,data):
     _,clas=data
-    return DataLoader(dataset=self.dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
+    return DataLoader(dataset=self.train_dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
   
   def train(self,data):
     model,subdataloader=data
-    #with io.capture_output() as captured:
-      #logging.getLogger("lightning").setLevel(logging.ERROR)
-    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
+    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=self.nb_epochs,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.fit(model=model,train_dataloaders=subdataloader)
 
   def test(self,data):
@@ -118,21 +119,38 @@ class Trainer:
     model_trainer=pl.Trainer(max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.test(model=model,dataloaders=subdataloader)
 
-  def test_models(self,data):
-    models=[(self.create_model(m),self.create_test_dataLoader(m)) for m in data]
-    list_of_delayed_functions = []
-    for d in models:
-      list_of_delayed_functions.append(delayed(self.test)(d))
-    res=compute(list_of_delayed_functions, num_workers=self.num_workers)[0]
-    return res 
+  def create_test_dataloader(self,data):
+    _,clas=data
+    return DataLoader(dataset=self.test_dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
+  
+  def parallel_exec(self,function,data):
+    list_of_delayed_functions=[]
+    for datapoint in data:
+      list_of_delayed_functions.append(delayed(function)(datapoint))
+    return compute(list_of_delayed_functions, num_workers=self.num_workers)
 
-  def train_models(self,data):
-    models=[(self.create_model(m),self.create_dataLoader(m)) for m in data]
-    list_of_delayed_functions = []
-    for d in models:
-      list_of_delayed_functions.append(delayed(self.train)(d))
-    compute(list_of_delayed_functions, num_workers=self.num_workers)
+  def train_models(self,data,pretest=False,posttest=False):
+    if (pretest or posttest):
+      assert self.test_dataset is not None , 'no dataset to test with'
+    models=[self.create_model(m) for m in data]
+    train_dataloaders=[self.create_dataLoader(m) for m in data]
+    test_dataoaders=[self.create_test_dataloader(m) for m in data]
+
+    if pretest:
+      self.parallel_exec(self.test,zip(models,test_dataoaders))
+    
+    self.parallel_exec(self.train,zip(models,train_dataloaders))
+    
+    if posttest:
+      self.parallel_exec(self.test,zip(models,test_dataoaders))
+
     return self.serialize_models(models) 
+
+
+  def get_test_results(self):
+    assert self.pretest_results is not None or self.posttest_results is not None, 'you did not run any tests'
+    return {'pretest':self.pretest_results,'posttest':self.posttest_results}
+
 
   def serialize_models(self,models):
     res=None
@@ -154,7 +172,7 @@ class Trainer2 :
         self.input_size=input_size
         self.debug=Debug()
         self.zeroTrain=zeroTrain
-        self.dataset=dataset
+        self.train_dataset=dataset
         self.num_workers=num_workers
     def train(self,data,modelSpec):
       
@@ -164,7 +182,7 @@ class Trainer2 :
             model=SerMod(modelSpec)
             if not self.zeroTrain:
               model.unserialize_model(vmodel)
-            dataloader=DataLoader(self.dataset.get_subDatast(clas),num_workers=self.num_workers,batch_size=self.batch_size,shuffle=True,pin_memory=True)
+            dataloader=DataLoader(self.train_dataset.get_subDatast(clas),num_workers=self.num_workers,batch_size=self.batch_size,shuffle=True,pin_memory=True)
             models.append({'model':model,'loader':dataloader,'idx':i})
         #pool = multiprocessing.Pool()
         #pool = multiprocessing.Pool(processes=10)
