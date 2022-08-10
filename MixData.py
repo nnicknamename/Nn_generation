@@ -51,10 +51,12 @@ class MixableDataset(Dataset):
         datapoint,label=dataset.__getitem__(index)
         return self.transform_datapoint(datapoint),self.transform_label(label,dataset)
 
-    def get_subDatast(self,focusClass,size):
-        assert size<=len(self.idx_table[focusClass]) , 'the given size is larger than the focus class'
-
-        dataset_idx=random.sample(self.idx_table[focusClass],size)
+    def get_subDatast(self,focusClass,size=None):
+        if size==None:
+            dataset_idx=self.idx_table[focusClass].copy()
+        else:
+            assert size<=len(self.idx_table[focusClass]) , 'the given size is larger than the focus class'
+            dataset_idx=random.sample(self.idx_table[focusClass],size)
         #dataset_idx=self.idx_table[focusClass].copy()
         
         for i in [i for i in range(len(self.classes)) if i != focusClass] :
