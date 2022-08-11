@@ -67,7 +67,6 @@ class MixableDataset(Dataset):
             dataset_idx.extend(random.sample(self.idx_table[i],s))
         return Subdataset(self,dataset_idx,focusClass)
 
-
 class Subdataset(Dataset):
     """
     a :class:`Subdataset` is a dataset scentered around a class from a given dataset, this class is called a focusClass, where half the data is 
@@ -85,6 +84,7 @@ class Subdataset(Dataset):
         for i in self.idx_table:
             targets.append(self.dataset.targets[i])
         self.targets=torch.Tensor(targets)
+
     def __len__(self):
         return len(self.idx_table)
 

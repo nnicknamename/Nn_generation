@@ -1,12 +1,9 @@
-import enum
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from IPython.utils import io
-import logging
 from NnGen.debug import Debug
 from dask import delayed
 from dask import compute
@@ -33,21 +30,15 @@ class SerMod(nn.Module):
       res=e(res)
     return res
 
-  def serialize_model(self):
+  @property
+  def parameter_vector(self):
     res=torch.tensor([])
     for i in range(0,len(self.stack),2):
       res=torch.cat((res,self.serialize_layer(self.stack[i])))
     return res
 
-  def serialize_layer(self,layer):
-    l=layer.state_dict()
-    w=l['weight'].clone().detach().flatten()
-    #extract Biasis
-    b=l['bias'].clone().detach().flatten()
-    res=torch.cat((w,b))
-    return res
-
-  def unserialize_model(self,ser):
+  @parameter_vector.setter
+  def parameter_vector(self,ser):
     k=0
     for i in range(len(self.layer_spec)-1):
       length=self.layer_spec[i]*self.layer_spec[i+1]+self.layer_spec[i+1]
@@ -57,6 +48,15 @@ class SerMod(nn.Module):
       self.stack[k].load_state_dict({'weight':l_wMat,'bias':l_bias}, strict=False)
       k+=2
 
+  def serialize_layer(self,layer):
+    l=layer.state_dict()
+    #extract weights
+    w=l['weight'].clone().detach().flatten()
+    #extract Biasis
+    b=l['bias'].clone().detach().flatten()
+    res=torch.cat((w,b))
+    return res
+    
 
 
 class light_serial_model(pl.LightningModule):
@@ -65,8 +65,9 @@ class light_serial_model(pl.LightningModule):
     self.model_spec=model_spec
     self.model= SerMod(model_spec)
     if not randomInint:
-      self.model.unserialize_model(model_vector)
+      self.model.parameter_vector=model_vector
     self.learning_rate=learning_rate
+
   def forward(self,x):
     return self.model(x)
 
@@ -109,6 +110,10 @@ class Trainer:
     _,clas=data
     return DataLoader(dataset=self.train_dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
   
+  def create_test_dataloader(self,data):
+    _,clas=data
+    return DataLoader(dataset=self.test_dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
+  
   def train(self,data):
     model,subdataloader=data
     model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=self.nb_epochs,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
@@ -119,32 +124,9 @@ class Trainer:
     model_trainer=pl.Trainer(max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.test(model=model,dataloaders=subdataloader)
 
-  def create_test_dataloader(self,data):
-    _,clas=data
-    return DataLoader(dataset=self.test_dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
-  
   def parallel_exec(self,function,data):
-    list_of_delayed_functions=[]
-    for datapoint in data:
-      list_of_delayed_functions.append(delayed(function)(datapoint))
+    list_of_delayed_functions=[delayed(function)(datapoint) for datapoint in data]
     return compute(list_of_delayed_functions, num_workers=self.num_workers)
-
-  def train_models(self,data,pretest=False,posttest=False):
-    if (pretest or posttest):
-      assert self.test_dataset is not None , 'no dataset to test with'
-    models=[self.create_model(m) for m in data]
-    train_dataloaders=[self.create_dataLoader(m) for m in data]
-    test_dataoaders=[self.create_test_dataloader(m) for m in data]
-
-    if pretest:
-      self.parallel_exec(self.test,zip(models,test_dataoaders))
-    
-    self.parallel_exec(self.train,zip(models,train_dataloaders))
-    
-    if posttest:
-      self.parallel_exec(self.test,zip(models,test_dataoaders))
-
-    return self.serialize_models(models) 
 
 
   def get_test_results(self):
@@ -154,14 +136,26 @@ class Trainer:
 
   def serialize_models(self,models):
     res=None
-    for model,_ in models:
-      serial_model=model.model.serialize_model()
+    for model in models:
+      serial_model=model.model.parameter_vector
       if res==None:
         res=serial_model.reshape(-1,len(serial_model))
       else:
         res=torch.cat([res,serial_model.reshape(-1,len(serial_model))])
     return res
 
+  def train_models(self,data,pretest=False,posttest=False):
+    if (pretest or posttest):
+      assert self.test_dataset is not None , 'no dataset to test with'
+    models=[self.create_model(m) for m in data]
+    train_dataloaders=[self.create_dataLoader(m) for m in data]
+    test_dataoaders=[self.create_test_dataloader(m) for m in data]
+    if pretest:
+      self.parallel_exec(self.test,zip(models,test_dataoaders))
+    self.parallel_exec(self.train,zip(models,train_dataloaders))
+    if posttest:
+      self.parallel_exec(self.test,zip(models,test_dataoaders))
+    return self.serialize_models(models) 
 
 
 class Trainer2 :
@@ -174,28 +168,17 @@ class Trainer2 :
         self.zeroTrain=zeroTrain
         self.train_dataset=dataset
         self.num_workers=num_workers
+
     def train(self,data,modelSpec):
-      
         models=[]
         for i,d in enumerate(data):
             vmodel,clas=d
             model=SerMod(modelSpec)
             if not self.zeroTrain:
-              model.unserialize_model(vmodel)
+              model.parameter_vector=vmodel
             dataloader=DataLoader(self.train_dataset.get_subDatast(clas),num_workers=self.num_workers,batch_size=self.batch_size,shuffle=True,pin_memory=True)
             models.append({'model':model,'loader':dataloader,'idx':i})
-        #pool = multiprocessing.Pool()
-        #pool = multiprocessing.Pool(processes=10)
-        #threads=[]
-        #for model in models:
-        #  th=threading.Thread(target=self.train_model,args=(model,))
-        #  threads.append(th)
-        #  th.start()
-
-        #for thread in threads:
-        #  thread.join()
-          #self.train_model(model)
-
+      
         list_of_delayed_functions = []
         for d in models:
           list_of_delayed_functions.append(delayed(self.train_model)(d))
@@ -205,7 +188,7 @@ class Trainer2 :
         #print(model.serialize_model())
         res=None
         for model in models:
-          serial_model=model['model'].serialize_model()
+          serial_model=model['model'].parameter_vector
           if res==None:
             res=serial_model.reshape(-1,len(serial_model))
           else:
