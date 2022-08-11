@@ -151,10 +151,10 @@ class Trainer:
     train_dataloaders=[self.create_dataLoader(m) for m in data]
     test_dataoaders=[self.create_test_dataloader(m) for m in data]
     if pretest:
-      self.parallel_exec(self.test,zip(models,test_dataoaders))
+      self.pretest_results=self.parallel_exec(self.test,zip(models,test_dataoaders))
     self.parallel_exec(self.train,zip(models,train_dataloaders))
     if posttest:
-      self.parallel_exec(self.test,zip(models,test_dataoaders))
+      self.posttest_results=self.parallel_exec(self.test,zip(models,test_dataoaders))
     return self.serialize_models(models) 
 
 
