@@ -127,7 +127,7 @@ class Trainer:
   def parallel_exec(self,function,data):
     list_of_delayed_functions=[delayed(function)(datapoint) for datapoint in data]
     results=compute(list_of_delayed_functions, num_workers=self.num_workers)[0]
-    return sum(results)/len(results)
+    return results
 
   def get_test_results(self):
     assert self.pretest_results is not None or self.posttest_results is not None, 'you did not run any tests'
