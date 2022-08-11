@@ -112,7 +112,7 @@ class Trainer:
   
   def create_test_dataloader(self,data):
     _,clas=data
-    return DataLoader(dataset=self.test_dataset.get_subDatast(clas),batch_size=self.batch_size,shuffle=True,num_workers=self.num_workers,pin_memory=True)
+    return DataLoader(dataset=self.test_dataset.get_subDatast(clas),batch_size=self.batch_size,num_workers=self.num_workers,pin_memory=True)
   
   def train(self,data):
     model,subdataloader=data
@@ -122,7 +122,7 @@ class Trainer:
   def test(self,data):
     model,subdataloader=data
     model_trainer=pl.Trainer(max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
-    model_trainer.test(model=model,dataloaders=subdataloader)
+    return model_trainer.test(model=model,dataloaders=subdataloader)
 
   def parallel_exec(self,function,data):
     list_of_delayed_functions=[delayed(function)(datapoint) for datapoint in data]
