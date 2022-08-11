@@ -122,12 +122,12 @@ class Trainer:
   def test(self,data):
     model,subdataloader=data
     model_trainer=pl.Trainer(max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
-    return model_trainer.test(model=model,dataloaders=subdataloader)
+    return model_trainer.test(model=model,dataloaders=subdataloader)[0]['val_loss']
 
   def parallel_exec(self,function,data):
     list_of_delayed_functions=[delayed(function)(datapoint) for datapoint in data]
-    return compute(list_of_delayed_functions, num_workers=self.num_workers)
-
+    results=compute(list_of_delayed_functions, num_workers=self.num_workers)[0]
+    return sum(results)/len(results)
 
   def get_test_results(self):
     assert self.pretest_results is not None or self.posttest_results is not None, 'you did not run any tests'
