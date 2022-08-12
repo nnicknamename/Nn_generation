@@ -116,7 +116,7 @@ class Trainer:
   
   def train(self,data):
     model,subdataloader=data
-    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=self.nb_epochs,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
+    model_trainer=pl.Trainer(callbacks=[EarlyStopping(monitor="train_loss",min_delta=0.0, mode="min")],max_epochs=self.nb_epochs,enable_checkpointing=False,enable_model_summary=False,enable_progress_bar=True,logger=False,gpus=self.gpus)
     model_trainer.fit(model=model,train_dataloaders=subdataloader)
 
   def test(self,data):
@@ -152,6 +152,7 @@ class Trainer:
     test_dataoaders=[self.create_test_dataloader(m) for m in data]
     if pretest:
       self.pretest_results=self.parallel_exec(self.test,zip(models,test_dataoaders))
+
     self.parallel_exec(self.train,zip(models,train_dataloaders))
     if posttest:
       self.posttest_results=self.parallel_exec(self.test,zip(models,test_dataoaders))
