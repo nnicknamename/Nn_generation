@@ -19,9 +19,9 @@ This idea rests on the capacity to create datasets of trained neural networks; s
 a large volume of base datapoints, taking classification as a case study, we require thousands 
 of classification models to train a meta model that generates classifires, I opted for binary 
 classification in order to have a larger set of unique models and the maximum number of 
-of classes, I mixed a set of already existing datasets; to do so, I implemented MixableDataset
+of classes, I mixed a set of already existing datasets; to do so, I implemented [MixableDataset](https://github.com/nnicknamename/Dataset_mix/blob/6a8ed0b668442de9547c92c15e482571c52c0619/MixData.py#L6)
 that takes multiple datasets (with multiple classes) as input and returns a set of binary 
-classification dataset (call get_subDataset).
+classification dataset (call [get_subDataset](https://github.com/nnicknamename/Dataset_mix/blob/6a8ed0b668442de9547c92c15e482571c52c0619/MixData.py#L63)).
 
 
 
@@ -29,4 +29,4 @@ classification dataset (call get_subDataset).
 The second component of this project is the ability to transform models into datapoints in 
 In order to create the meta dataset, this requires the serialization of the models; given a neural network 
 The serialization returns a vector of all its weights and biases; this functionality is implemented in the 
-SerMod class.
+[SerMod](https://github.com/nnicknamename/Dataset_mix/blob/6a8ed0b668442de9547c92c15e482571c52c0619/SerMod.py#L12) class.
